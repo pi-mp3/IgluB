@@ -1,6 +1,6 @@
 
 import { Request, Response } from 'express';
-import { auth, db } from '../firebase';
+import { auth, db } from '../firebase/firebase';
 import { User } from '../models/User';
 
 export const register = async (req: Request, res: Response) => {
