@@ -9,3 +9,5 @@ export const createMeeting = (req: Request, res: Response) => {
   const meetingId = uuidv4(); // genera un ID único
   return res.json({ meetingId, title });
 };
+
+

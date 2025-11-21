@@ -14,7 +14,9 @@
     "fb": "^2.0.0",
     "firebase-admin": "^11.11.1",
     "google-auth-library": "^10.5.0",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^7.0.10",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
@@ -23,6 +25,7 @@
     "@types/express": "^4.17.25",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.19.25",
+    "@types/nodemailer": "^7.0.4",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
   }

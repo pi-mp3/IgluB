@@ -1,42 +1,36 @@
-/**
- * recoverPassword.controller.ts
- * 
- * Controller to handle password recovery via email using Firebase Authentication.
- * Receives an email, sends a password reset email with a secure link, and returns a response.
- * 
- * @module controllers/recoverPassword
- */
-
+// src/controllers/recoverPassword.controller.ts
 import { Request, Response } from 'express';
-import { auth } from '../firebase/firebase';
+import { getAuth } from 'firebase-admin/auth';
+import nodemailer from 'nodemailer';
 
-/**
- * Endpoint to trigger password recovery email
- * POST /api/auth/recover-password
- * 
- * @param {Request} req - Express request object, expects { email: string } in body
- * @param {Response} res - Express response object
- * @returns {Promise<Response>} - JSON with success message or error
- */
-export const recoverPassword = async (req: Request, res: Response): Promise<Response> => {
+export const recoverPassword = async (req: Request, res: Response) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: 'Email is required' });
+
   try {
-    const { email } = req.body;
+    const auth = getAuth();
+    const resetLink = await auth.generatePasswordResetLink(email);
 
-    if (!email) {
-      return res.status(400).json({ message: 'Email is required' });
-    }
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
 
-    // Send password reset email via Firebase Auth
-    await auth.sendPasswordResetEmail(email);
+    await transporter.sendMail({
+      from: `"Your App" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: 'Password Reset',
+      html: `<p>Click <a href="${resetLink}">here</a> to reset your password.</p>`,
+    });
 
-    return res.json({ message: 'Password recovery email sent successfully' });
+    return res.json({ message: 'Password reset email sent' });
   } catch (error: any) {
     console.error(error);
-
-    if (error.code === 'auth/user-not-found') {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({ message: 'Error generating password reset link', error: error.message });
   }
 };
