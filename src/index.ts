@@ -1,36 +1,20 @@
-import express from "express";
-import cors from "cors";
-import admin from "firebase-admin";
+/**
+ * index.ts
+ * 
+ * Entry point of the Express server.
+ * Starts the application on the port defined in .env or 3001 by default.
+ * 
+ * @module index
+ */
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+import app from './app';
 
-// Inicializar Firebase Admin
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-  });
-}
+/** Server port, taken from environment variable or default to 3001 */
+const PORT = process.env.PORT || 3001;
 
-app.get("/", (req, res) => {
-  res.send("Servidor IGLU Backend funcionando 🔥");
-});
-
-// Ejemplo de endpoint protegido con Firebase Admin
-app.get("/verify", async (req, res) => {
-  try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Token faltante" });
-
-    const decoded = await admin.auth().verifyIdToken(token);
-    res.json({ message: "Token válido", uid: decoded.uid });
-  } catch (error) {
-    res.status(401).json({ error: "Token inválido" });
-  }
-});
-
-const PORT = 3001;
+/**
+ * Starts the Express server and listens for HTTP requests
+ */
 app.listen(PORT, () => {
-  console.log(`🔥 Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`🔥 Server running at http://localhost:${PORT}`);
 });

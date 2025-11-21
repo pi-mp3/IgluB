@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { auth, db } from "../firebase/firebase";
-import { User } from "../models/User";
+import { User } from "../models/register";
 
 const JWT_SECRET = process.env.JWT_SECRET || "my_secret_key";
 

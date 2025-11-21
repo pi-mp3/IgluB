@@ -1,12 +1,20 @@
+/**
+ * oauthRoutes.ts
+ * 
+ * Routes for Google OAuth login.
+ * 
+ * @module routes/oauthRoutes
+ */
+
 import { Router } from 'express';
-import { register, login, updateUser, deleteUser, recoverPassword } from '../controllers/auth';
+import { oauthCallback } from '../controllers/oauthController';
 
 const router = Router();
 
-router.post('/register', register);
-router.post('/login', login);
-router.put('/user/:id', updateUser);
-router.delete('/user/:id', deleteUser);
-router.post('/recover', recoverPassword);
+/**
+ * Route to handle Google OAuth redirect
+ * GET /api/auth/google/callback
+ */
+router.get('/google/callback', oauthCallback);
 
 export default router;
