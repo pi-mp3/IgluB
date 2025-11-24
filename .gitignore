@@ -5,7 +5,7 @@
 .env
 
 # Credenciales de Firebase
-serviceAccountKey.json
+iglu-2025-firebase-adminsdk-fbsvc-d91253ddfa.json
 
 # OAuth y otros secretos
 credentials.json
