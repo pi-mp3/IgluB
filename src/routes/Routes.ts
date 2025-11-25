@@ -9,21 +9,29 @@
 
 import { Router } from 'express';
 
-import userRoutes from './register.routes';
-import oauthRoutes from './oauthRoutes'; // Google OAuth
-import facebookRoutes from './facebookRoutes';
-import editUserRoutes from './editUser.routes';
-import deleteUserRoutes from './deleteUser.routes';
+// Rutas de autenticación
+import userRoutes from './register.routes';       // Registro / login
+import oauthRoutes from './oauthRoutes';          // Google OAuth
+import facebookRoutes from './facebookRoutes';    // Facebook OAuth
+import logoutRoutes from './logout.routes';       // Logout
+
+// Rutas de manejo de usuario
+import editUserRoutes from './editUser.routes';     // Editar usuario
+import deleteUserRoutes from './deleteUser.routes'; // Eliminar usuario
+
+// Rutas de recuperación y reset de contraseña
 import recoverPasswordRoutes from './recoverPassword.routes';
+import resetPasswordRoutes from './resetPassword.routes';
 
 const router = Router();
 
 /**
- * Authentication routes (register, login, Google OAuth, Facebook auth)
+ * Authentication routes
  */
 router.use('/auth', userRoutes);
 router.use('/auth', oauthRoutes);
 router.use('/auth', facebookRoutes);
+router.use('/auth', logoutRoutes);
 
 /**
  * User management routes
@@ -32,8 +40,9 @@ router.use('/user', editUserRoutes);
 router.use('/user', deleteUserRoutes);
 
 /**
- * Password recovery route
+ * Password recovery routes
  */
 router.use('/recover', recoverPasswordRoutes);
+router.use('/user', resetPasswordRoutes);
 
 export default router;

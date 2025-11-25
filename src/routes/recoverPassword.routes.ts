@@ -1,7 +1,7 @@
 /**
  * recoverPassword.routes.ts
  * 
- * Routes for password recovery
+ * Routes for password recovery (request reset email)
  * 
  * @module routes/recoverPassword
  */
@@ -12,7 +12,7 @@ import { recoverPassword } from '../controllers/recoverPassword.controller';
 const router = Router();
 
 /**
- * POST /api/user/recover-password
+ * POST /api/recover/user/recover-password
  * Request password recovery email
  */
 router.post('/user/recover-password', recoverPassword);
