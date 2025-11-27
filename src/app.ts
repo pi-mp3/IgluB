@@ -3,61 +3,45 @@
  * 
  * Main Express configuration for the Iglu backend.
  * Sets up middlewares and main routes using a centralized router.
- * 
- * @module app
  */
 
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import router from './routes/Routes'; // Centralized routes
-
+import router from './routes/Routes';
+import path from 'path';
 dotenv.config();
+console.log(" Working directory:", process.cwd());
+console.log(" Looking for package.json at:", path.resolve("package.json"));
 
-/** 
- * Express application instance
- * @type {express.Application} 
- */
 const app = express();
 
 // =======================
 // Middlewares
 // =======================
 
-/**
- * CORS middleware
- * Allows requests from the frontend at http://localhost:5173
- * Enables credentials (cookies, auth headers) if needed
- */
 app.use(cors({
-  origin: 'http://localhost:5173', // Change to your frontend URL if different
+  origin: [
+    "http://localhost:5173",
+    "https://iglu-f-ip38.vercel.app"
+  ],
   credentials: true,
 }));
 
-/**
- * Middleware to parse JSON in incoming requests
- */
 app.use(express.json());
 
 // =======================
 // Routes
 // =======================
 
-/**
- * Main API router
- * Base path: /api
- * All feature routes are centralized in routes.ts
- */
 app.use('/api', router);
 
 // =======================
-// Root route (optional)
+// Root route
 // =======================
-app.get('/', (req, res) => {
+
+app.get('/', (req: Request, res: Response) => {
   res.send('Iglu Backend is running');
 });
 
-/**
- * Export the app to be used in index.ts
- */
 export default app;
