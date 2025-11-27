@@ -14,6 +14,8 @@ import userRoutes from './register.routes';       // Registro / login
 import oauthRoutes from './oauthRoutes';          // Google OAuth
 import facebookRoutes from './facebookRoutes';    // Facebook OAuth
 import logoutRoutes from './logout.routes';       // Logout
+import userGetRoutes from './user.routes';
+
 
 // Rutas de manejo de usuario
 import editUserRoutes from './editUser.routes';     // Editar usuario
@@ -32,6 +34,7 @@ router.use('/auth', userRoutes);
 router.use('/auth', oauthRoutes);
 router.use('/auth', facebookRoutes);
 router.use('/auth', logoutRoutes);
+router.use('/user', userGetRoutes);
 
 /**
  * User management routes

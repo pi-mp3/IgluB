@@ -76,6 +76,45 @@ export const updateUser = async (
 };
 
 /**
+ * Get user profile data
+ */
+
+export const getUserById = async (req: Request, res: Response) => {
+  console.log("📌 [GET USER] Iniciando endpoint /user/:id");
+
+  try {
+    const userId = req.params.id;
+
+    // Validamos que haya enviado un ID
+    if (!userId) {
+      console.warn("⚠️ No se envió userId en los params");
+      return res.status(400).json({ error: "Missing user ID in params" });
+    }
+
+    console.log("🔎 Buscando userId:", userId);
+
+    const docRef = db.collection("users").doc(userId);
+    const userDoc = await docRef.get();
+
+    if (!userDoc.exists) {
+      console.warn(`⚠️ Usuario ${userId} no existe en Firestore`);
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const profile = userDoc.data();
+    console.log("✅ Usuario encontrado:", profile);
+
+    return res.status(200).json(profile);
+  } catch (err: any) {
+    console.error("❌ [SERVER ERROR] getUserById:", err);
+    return res.status(500).json({
+      message: "Server error getting user",
+      error: err.message,
+    });
+  }
+};
+
+/**
  * Deletes a user from Firebase Authentication and Firestore.
  */
 export const deleteUser = async (
