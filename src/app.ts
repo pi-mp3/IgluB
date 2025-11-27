@@ -9,8 +9,10 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import router from './routes/Routes';
-
+import path from 'path';
 dotenv.config();
+console.log(" Working directory:", process.cwd());
+console.log(" Looking for package.json at:", path.resolve("package.json"));
 
 const app = express();
 
