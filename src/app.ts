@@ -1,3 +1,10 @@
+/**
+ * app.ts
+ * 
+ * Main Express configuration for the Iglu backend.
+ * Sets up middlewares and main routes using a centralized router.
+ */
+
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
