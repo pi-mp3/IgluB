@@ -19,7 +19,10 @@ const app = express();
 // =======================
 
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: [
+    "http://localhost:5173",
+    "https://iglu-f-ip38.vercel.app"
+  ],
   credentials: true,
 }));
 
@@ -34,6 +37,7 @@ app.use('/api', router);
 // =======================
 // Root route
 // =======================
+
 app.get('/', (req: Request, res: Response) => {
   res.send('Iglu Backend is running');
 });
