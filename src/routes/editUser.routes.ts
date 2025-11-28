@@ -1,20 +1,15 @@
 /**
  * editUser.routes.ts
- * 
- * Routes for editing user account
- * 
+ *
+ * Routes to manage user profile operations.
+ *
  * @module routes/editUser
  */
-
-import { Router } from 'express';
-import { editUser } from '../controllers/editUser.controller';
+import { Router } from "express";
+import { editUser } from "../controllers/editUser.controller";
 
 const router = Router();
 
-/**
- * PUT /api/user/:id
- * Edit user account by ID
- */
-router.put('/user/:id', editUser);
+router.put("/:id", editUser);
 
 export default router;
