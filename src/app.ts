@@ -24,6 +24,7 @@ app.use(cors({
   origin: [
     "http://localhost:5173",
     "https://iglu-f-ip38.vercel.app"
+    
   ],
   credentials: true,
 }));
