@@ -1,44 +1,41 @@
 /**
  * firebase.ts
  *
- * Initializes Firebase Admin using a local JSON service account file.
- * Works with Google login and avoids broken private_key issues.
- * 
+ * Initializes Firebase Admin using a JSON service account stored
+ * directly in the FIREBASE_SERVICE_ACCOUNT environment variable.
+ *
  * Documentation: English comments
- * User messages: Español (N/A here)
  */
 
 import admin from "firebase-admin";
 import dotenv from "dotenv";
-import fs from "fs";
 
 dotenv.config();
 
 /* -------------------------------------------
- * Load service account from local file path
+ * Load service account JSON from environment
  * ------------------------------------------- */
-const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
 
-if (!serviceAccountPath) {
-  throw new Error("❌ Missing FIREBASE_SERVICE_ACCOUNT_PATH in .env");
+if (!serviceAccountJson) {
+  throw new Error("❌ Missing FIREBASE_SERVICE_ACCOUNT in .env");
 }
 
-if (!fs.existsSync(serviceAccountPath)) {
-  throw new Error(`❌ Service account file not found at: ${serviceAccountPath}`);
-}
+let serviceAccount: admin.ServiceAccount;
 
-const serviceAccount = JSON.parse(
-  fs.readFileSync(serviceAccountPath, "utf8")
-);
+try {
+  serviceAccount = JSON.parse(serviceAccountJson);
+} catch (err) {
+  throw new Error("❌ FIREBASE_SERVICE_ACCOUNT is not valid JSON");
+}
 
 /* -------------------------------------------
  * Initialize Firebase Admin
  * ------------------------------------------- */
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+    credential: admin.credential.cert(serviceAccount),
   });
-
   console.log("🔥 Firebase Admin initialized successfully");
 }
 
