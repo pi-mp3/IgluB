@@ -7,7 +7,7 @@
  */
 
 import { Router } from 'express';
-import { facebookOAuthCallback } from '../controllers/facebookOAuth.controller';
+import { facebookCallback } from '../controllers/facebookOAuth.controller'; // ⚠️ Nombre corregido
 
 const router = Router();
 
@@ -15,6 +15,6 @@ const router = Router();
  * Route to handle Facebook OAuth login
  * POST /callback
  */
-router.post('/callback', facebookOAuthCallback);
+router.post('/callback', facebookCallback);
 
 export default router;

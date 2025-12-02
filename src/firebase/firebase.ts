@@ -1,27 +1,51 @@
+/**
+ * firebase.ts
+ *
+ * Initializes Firebase Admin using a local JSON service account file.
+ * Works with Google login and avoids broken private_key issues.
+ * 
+ * Documentation: English comments
+ * User messages: Español (N/A here)
+ */
+
 import admin from "firebase-admin";
 import dotenv from "dotenv";
+import fs from "fs";
+
 dotenv.config();
 
-// Obtener JSON desde variable de entorno
-const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT;
+/* -------------------------------------------
+ * Load service account from local file path
+ * ------------------------------------------- */
+const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
 
-if (!serviceAccountString) {
-  throw new Error("❌ FIREBASE_SERVICE_ACCOUNT missing in environment variables");
+if (!serviceAccountPath) {
+  throw new Error("❌ Missing FIREBASE_SERVICE_ACCOUNT_PATH in .env");
 }
 
-let serviceAccount;
-try {
-  serviceAccount = JSON.parse(serviceAccountString);
-} catch (e) {
-  throw new Error("❌ FIREBASE_SERVICE_ACCOUNT is not valid JSON");
+if (!fs.existsSync(serviceAccountPath)) {
+  throw new Error(`❌ Service account file not found at: ${serviceAccountPath}`);
 }
 
-// Inicializar Firebase Admin
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+const serviceAccount = JSON.parse(
+  fs.readFileSync(serviceAccountPath, "utf8")
+);
 
+/* -------------------------------------------
+ * Initialize Firebase Admin
+ * ------------------------------------------- */
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+  });
+
+  console.log("🔥 Firebase Admin initialized successfully");
+}
+
+/* -------------------------------------------
+ * Exports
+ * ------------------------------------------- */
 export const db = admin.firestore();
 export const auth = admin.auth();
 
-console.log("🔥 Firebase admin initialized");
+export default admin;

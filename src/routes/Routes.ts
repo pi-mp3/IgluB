@@ -18,10 +18,12 @@ import logoutRoutes from './logout.routes';       // Logout
 // Rutas de manejo de usuario
 import editUserRoutes from './editUser.routes';     // Editar usuario
 import deleteUserRoutes from './deleteUser.routes'; // Eliminar usuario
+import getUserRoutes from './getUser.routes';
 
 // Rutas de recuperación y reset de contraseña
 import recoverPasswordRoutes from './recoverPassword.routes';
 import resetPasswordRoutes from './resetPassword.routes';
+
 
 const router = Router();
 
@@ -38,6 +40,7 @@ router.use('/auth', logoutRoutes);
  */
 router.use('/user', editUserRoutes);
 router.use('/user', deleteUserRoutes);
+router.use('/user', getUserRoutes);
 
 /**
  * Password recovery routes
