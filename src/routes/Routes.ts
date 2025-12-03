@@ -12,7 +12,7 @@ import { Router } from 'express';
 // Rutas de autenticación
 import userRoutes from './register.routes';       // Registro / login
 import oauthRoutes from './oauthRoutes';          // Google OAuth
-import facebookRoutes from './facebookRoutes';    // Facebook OAuth
+import githubRoutes from './githubRoutes';        // GitHub OAuth
 import logoutRoutes from './logout.routes';       // Logout
 
 // Rutas de manejo de usuario
@@ -24,7 +24,6 @@ import getUserRoutes from './getUser.routes';
 import recoverPasswordRoutes from './recoverPassword.routes';
 import resetPasswordRoutes from './resetPassword.routes';
 
-
 const router = Router();
 
 /**
@@ -32,7 +31,7 @@ const router = Router();
  */
 router.use('/auth', userRoutes);
 router.use('/auth', oauthRoutes);
-router.use('/auth', facebookRoutes);
+router.use('/auth', githubRoutes);   // <-- aquí agregamos GitHub
 router.use('/auth', logoutRoutes);
 
 /**
