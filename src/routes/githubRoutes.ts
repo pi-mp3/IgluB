@@ -13,14 +13,14 @@ import { githubAuth, githubCallback } from "../controllers/githubController";
 const router = Router();
 
 /**
- * Step 1: Redirect user to GitHub OAuth
- * GET /auth/github
+ * GET /api/auth/github
+ * Inicia login con GitHub
  */
 router.get("/github", githubAuth);
 
 /**
- * Step 2: GitHub redirects back with code
- * GET /auth/github/callback
+ * GET /api/auth/github/callback
+ * GitHub devuelve el token
  */
 router.get(
   "/github/callback",

@@ -1,8 +1,9 @@
 /**
  * githubController.ts
  *
- * GitHub OAuth controller.
- * Fully typed and stable.
+ * GitHub OAuth 2.0 Controller
+ * Final production-ready version.
+ * Stable, typed and fully documented in English.
  */
 
 import { Request, Response, NextFunction } from "express";
@@ -12,18 +13,18 @@ import { auth, db } from "../firebase/firebase";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "my_secret_key";
-const FRONTEND_URL = process.env.FRONTEND_URL!;
-const REDIRECT_URI = process.env.GITHUB_REDIRECT_URI!;
+const FRONTEND_URL = process.env.FRONTEND_URL!; // Example: https://your-frontend.vercel.app
+const CALLBACK_URL = process.env.GITHUB_REDIRECT_URI!; // Example: http://localhost:5000/api/auth/github/callback
 
 /**
- * Configure GitHub OAuth Strategy
+ * GitHub OAuth Strategy Configuration
  */
 passport.use(
   new GitHubStrategy(
     {
       clientID: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-      callbackURL: REDIRECT_URI,
+      callbackURL: CALLBACK_URL,
       scope: ["user:email"],
     },
 
@@ -35,26 +36,28 @@ passport.use(
     ) => {
       try {
         const email = profile.emails?.[0]?.value;
-        if (!email) return done("GitHub no proporcionó email");
+
+        if (!email) return done("GitHub did not provide an email");
 
         let userRecord;
 
-        // Check if Firebase user exists
+        // Try to fetch user from Firebase
         try {
           userRecord = await auth.getUserByEmail(email);
         } catch {
-          // Create user if not found
           userRecord = await auth.createUser({
             email,
             displayName: profile.username || "GitHub User",
           });
 
-          // Store data in firestore
+          // Save new GitHub user in Firestore
           await db.collection("users").doc(userRecord.uid).set({
             email,
             name: profile.username,
             avatar: profile.photos?.[0]?.value,
             provider: "github",
+            createdAt: new Date(),
+            updatedAt: new Date(),
           });
         }
 
@@ -67,12 +70,12 @@ passport.use(
 );
 
 /**
- * Step 1: Redirect to GitHub
+ * STEP 1 — Redirect user to GitHub
  */
 export const githubAuth = passport.authenticate("github");
 
 /**
- * Step 2: GitHub redirects back here
+ * STEP 2 — GitHub redirects back here
  */
 export const githubCallback = (
   req: Request,
@@ -86,12 +89,12 @@ export const githubCallback = (
         return res.redirect(`${FRONTEND_URL}/login?error=github-auth-failed`);
       }
 
-      // Create JWT for the frontend
+      // Generate JWT for frontend
       const token = jwt.sign({ uid: user.uid }, JWT_SECRET, {
         expiresIn: "7d",
       });
 
-      // Final redirect to your frontend
+      // Final redirect to frontend success page
       return res.redirect(
         `${FRONTEND_URL}/auth/success?token=${token}&uid=${user.uid}`
       );

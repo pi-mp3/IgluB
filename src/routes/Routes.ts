@@ -46,5 +46,9 @@ router.use('/user', getUserRoutes);
  */
 router.use('/recover', recoverPasswordRoutes);
 router.use('/user', resetPasswordRoutes);
+router.get("/auth/callback", (req, res) => {
+    // Aquí rediriges al frontend después de OAuth
+    res.redirect(`${process.env.FRONTEND_URL}/auth/callback`);
+});
 
 export default router;
