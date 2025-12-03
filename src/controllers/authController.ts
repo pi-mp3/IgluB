@@ -5,6 +5,7 @@
  * Technical documentation in English; user-facing messages in Spanish.
  */
 
+
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { auth, db } from "../firebase/firebase";
@@ -14,11 +15,10 @@ const JWT_SECRET = process.env.JWT_SECRET || "my_secret_key";
 
 /**
  * Generates a JWT token for a user.
- * @param {string} uid - Firebase user ID.
- * @returns {string} JWT token.
+ * Includes both uid AND email.
  */
-const generateToken = (uid: string): string => {
-  return jwt.sign({ uid }, JWT_SECRET, { expiresIn: "7d" });
+const generateToken = (uid: string, email: string): string => {
+  return jwt.sign({ uid, email }, JWT_SECRET, { expiresIn: "7d" });
 };
 
 /**
@@ -28,7 +28,10 @@ export const register = async (req: Request, res: Response): Promise<Response> =
   try {
     const { email, password, ...data } = req.body as User & { password: string };
 
+    // Create user in Firebase Authentication
     const userRecord = await auth.createUser({ email, password });
+
+    // Save additional data in Firestore
     await db.collection("users").doc(userRecord.uid).set(data);
 
     return res.json({
@@ -44,19 +47,30 @@ export const register = async (req: Request, res: Response): Promise<Response> =
 };
 
 /**
- * Logs in a user.
- * NOTE: Password login must be handled on frontend using Firebase Client SDK.
+ * Logs in a user and generates a JWT token.
+ * Note: Password auth must be done in frontend via Firebase Client.
+ * Backend only verifies email exists and issues token.
  */
 export const login = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { email } = req.body;
 
+    // Verify if user exists in Firebase Authentication
     const user = await auth.getUserByEmail(email);
-    if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
 
-    return res.status(400).json({
-      error: "El inicio de sesión con contraseña debe manejarse en el frontend con Firebase Client SDK",
+    // Generate token with uid + email
+    const token = generateToken(user.uid, email);
+
+    return res.json({
+      mensaje: "Inicio de sesión exitoso",
+      uid: user.uid,
+      email,
+      token
     });
+
   } catch (err: any) {
     return res.status(400).json({
       error: "Error al iniciar sesión",
@@ -86,7 +100,7 @@ export const updateUser = async (req: Request, res: Response): Promise<Response>
 
 /**
  * Sends a password recovery email.
- * NOTE: This must be handled in the frontend using Firebase Client SDK.
+ * Must be handled with Firebase Client SDK.
  */
 export const recoverPassword = async (req: Request, res: Response): Promise<Response> => {
   return res.status(400).json({
