@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../ServidorChatB"
+		},
+		{
+			"path": "../ServidorVozB-main"
 		}
 	],
 	"settings": {}

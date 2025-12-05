@@ -1,33 +1,31 @@
 /**
  * oauthRoutes.ts
  *
- * Google OAuth 2.0 Routes
- * Handles the full login process:
- *  - GET /auth/google              → Redirect to Google Consent Screen
- *  - GET/POST /auth/google/callback → Google returns the authorization code
+ * Google OAuth Routes
  */
 
-import { Router } from "express";
-import { googleLogin, oauthCallback } from "../controllers/oauthController";
-
+import { Router } from 'express';
 const router = Router();
 
-/**
- * GET /auth/google
- * Step 1 — Redirect user to Google consent page.
- */
-router.get("/google", googleLogin);
+router.get('/google', (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const redirectUri = "http://localhost:5000/api/auth/google/callback";
+  const scope = "openid email profile";
 
-/**
- * GET /auth/google/callback
- * Step 2 — Google redirects back with ?code=...
- */
-router.get("/google/callback", oauthCallback);
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`;
+  res.redirect(url);
+});
 
-/**
- * POST /auth/google/callback
- * Optional — Some OAuth providers may return POST.
- */
-router.post("/google/callback", oauthCallback);
+router.get('/google/callback', async (req, res) => {
+  const code = req.query.code;
+  if (!code) return res.status(400).send("No code provided");
+
+  // TODO: Intercambiar code por token real y buscar/crear usuario
+  const token = "FAKE_JWT_TOKEN";
+  const user = { uid: "1", email: "googleuser@example.com", name: "Google User" };
+
+  // Redirect to frontend OAuth callback
+  res.redirect(`http://localhost:5173/oauth/callback?token=${token}&uid=${user.uid}&email=${user.email}&name=${user.name}&provider=google`);
+});
 
 export default router;

@@ -2,32 +2,29 @@
  * githubRoutes.ts
  *
  * GitHub OAuth Routes
- * Manages the GitHub OAuth 2.0 login flow:
- *  - GET /auth/github          → Redirects user to GitHub Login
- *  - GET /auth/github/callback → GitHub returns the authorization code
  */
 
 import { Router } from "express";
-import passport from "passport";
-import { githubAuth, githubCallback } from "../controllers/githubController";
-
 const router = Router();
 
-/**
- * GET /auth/github
- * Initiates GitHub OAuth login by redirecting user to GitHub.
- */
-router.get("/github", githubAuth);
+router.get('/github', (req, res) => {
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  const redirectUri = "http://localhost:5000/api/auth/github/callback";
+  const scope = "read:user user:email";
 
-/**
- * GET /auth/github/callback
- * GitHub redirects back with ?code=...
- * Passport processes the callback and passes control to githubCallback.
- */
-router.get(
-  "/github/callback",
-  passport.authenticate("github", { session: false }),
-  githubCallback
-);
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}`;
+  res.redirect(url);
+});
+
+router.get('/github/callback', (req, res) => {
+  const code = req.query.code;
+  if (!code) return res.status(400).send("No code provided");
+
+  // TODO: Intercambiar code por token real y buscar/crear usuario
+  const token = "FAKE_JWT_TOKEN";
+  const user = { uid: "2", email: "githubuser@example.com", name: "GitHub User" };
+
+  res.redirect(`http://localhost:5173/oauth/callback?token=${token}&uid=${user.uid}&email=${user.email}&name=${user.name}&provider=github`);
+});
 
 export default router;
