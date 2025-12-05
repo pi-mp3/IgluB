@@ -5,8 +5,6 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { User } from '../models/register';
 
-const FB = require('fb');
-
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey';
 const SALT_ROUNDS = 10;
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -57,15 +55,18 @@ export const registerUser = async (req: Request, res: Response) => {
     // Hash password for Firestore
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const newUser: User = {
+    // Unified Firestore schema (same as OAuth)
+    const newUser = {
+      id: userRecord.uid,
       name: firstName,
-      lastName,
-      age,
+      lastName: lastName || '',
       email,
       password: hashedPassword,
-      authProvider: 'manual',
+      provider: 'email',
+      photoURL: '',
+      age: age || null,
       createdAt: new Date(),
-      uid: userRecord.uid,
+      updatedAt: new Date(),
     };
 
     await userRef.doc(userRecord.uid).set(newUser); // Use UID as document ID
@@ -96,7 +97,7 @@ export const loginManual = async (req: Request, res: Response) => {
     const snapshot = await userRef.where('email', '==', email).get();
     if (snapshot.empty) return res.status(400).json({ message: 'Usuario no encontrado' });
 
-    const userData = snapshot.docs[0].data() as User;
+    const userData = snapshot.docs[0].data();
     const userId = snapshot.docs[0].id;
 
     const match = await bcrypt.compare(password, userData.password || '');
@@ -104,7 +105,17 @@ export const loginManual = async (req: Request, res: Response) => {
 
     const token = jwt.sign({ uid: userId, email }, JWT_SECRET, { expiresIn: '2h' });
 
-    return res.json({ token, message: 'Inicio de sesión exitoso' });
+    return res.json({ 
+      token, 
+      user: {
+        uid: userId,
+        email: userData.email,
+        name: userData.name,
+        lastName: userData.lastName,
+        photoURL: userData.photoURL || ''
+      },
+      message: 'Inicio de sesión exitoso' 
+    });
   } catch (err) {
     console.error('LOGIN ERROR:', err);
     return res.status(500).json({ message: 'Error interno del servidor' });
@@ -160,53 +171,6 @@ export const loginGoogle = async (req: Request, res: Response) => {
     return res.json({ token, message: 'Inicio de sesión con Google exitoso' });
   } catch (err) {
     console.error('GOOGLE LOGIN ERROR:', err);
-    return res.status(500).json({ message: 'Error interno del servidor' });
-  }
-};
-
-/**
- * Facebook OAuth login.
- * POST /api/auth/login/facebook
- */
-export const loginFacebook = async (req: Request, res: Response) => {
-  try {
-    const { accessToken } = req.body;
-    if (!accessToken) return res.status(400).json({ message: 'Access token requerido' });
-
-    const fbResponse: any = await FB.api('me', { fields: ['id', 'name', 'email'], access_token: accessToken });
-    const { id: facebookId, name, email } = fbResponse;
-
-    if (!facebookId || !name || !email) return res.status(400).json({ message: 'Información incompleta de Facebook' });
-
-    const userRef = db.collection('users');
-    const snapshot = await userRef.where('email', '==', email).get();
-
-    let userId: string;
-    if (snapshot.empty) {
-      const userRecord = await auth.createUser({ email, displayName: name });
-
-      const newUser: User = {
-        name,
-        lastName: '',
-        age: 0,
-        email,
-        password: '',
-        authProvider: 'facebook',
-        oauthId: facebookId,
-        createdAt: new Date(),
-        uid: userRecord.uid,
-      };
-
-      await userRef.doc(userRecord.uid).set(newUser);
-      userId = userRecord.uid;
-    } else {
-      userId = snapshot.docs[0].id;
-    }
-
-    const token = jwt.sign({ uid: userId, email }, JWT_SECRET, { expiresIn: '2h' });
-    return res.json({ token, message: 'Inicio de sesión con Facebook exitoso' });
-  } catch (err) {
-    console.error('FACEBOOK LOGIN ERROR:', err);
     return res.status(500).json({ message: 'Error interno del servidor' });
   }
 };

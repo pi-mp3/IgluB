@@ -7,9 +7,12 @@ import { Request, Response } from "express";
 import admin from "firebase-admin";
 import { db } from "../firebase/firebase";
 import { OAuth2Client } from "google-auth-library";
+import jwt from "jsonwebtoken";
 
 const FRONTEND_CALLBACK =
   process.env.FRONTEND_CALLBACK_URL || "http://localhost:5173/oauth/callback";
+
+const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
 export const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID!,
@@ -35,11 +38,20 @@ export const googleLogin = (_req: Request, res: Response) => {
  */
 export const oauthCallback = async (req: Request, res: Response) => {
   try {
+    console.log("=== Google OAuth Callback Started ===");
+    console.log("Query params:", req.query);
+    console.log("Body:", req.body);
+    
     const code = (req.query.code as string) || (req.body?.code as string);
-    if (!code) return res.status(400).json({ error: "Missing authorization code" });
+    if (!code) {
+      console.error("No authorization code received");
+      return res.status(400).json({ error: "Missing authorization code" });
+    }
 
+    console.log("Getting tokens from Google...");
     const { tokens } = await googleClient.getToken(code);
     googleClient.setCredentials(tokens);
+    console.log("Tokens received successfully");
 
     if (!tokens.id_token)
       return res.status(500).json({ error: "Google returned no ID token" });
@@ -50,9 +62,13 @@ export const oauthCallback = async (req: Request, res: Response) => {
     });
 
     const payload = ticket.getPayload();
-    if (!payload) return res.status(400).json({ error: "Invalid Google token" });
+    if (!payload) {
+      console.error("Invalid payload from Google");
+      return res.status(400).json({ error: "Invalid Google token" });
+    }
 
     const uid = payload.sub;
+    console.log("User authenticated:", { uid, email: payload.email, name: payload.name });
 
     // Sync Firebase
     let firebaseUser;
@@ -94,12 +110,20 @@ export const oauthCallback = async (req: Request, res: Response) => {
         updatedAt: new Date(),
       });
 
-    // Redirect to the correct React callback
-    return res.redirect(
-      `${FRONTEND_CALLBACK}?uid=${uid}&provider=google`
-    );
-  } catch (err) {
-    console.error("Google OAuth Callback Error:", err);
-    return res.status(500).json({ error: "OAuth callback failed" });
+    // Generate JWT token
+    const token = jwt.sign({ uid, email: data.email }, JWT_SECRET, { expiresIn: "7d" });
+    console.log("JWT token generated successfully");
+
+    const redirectUrl = `${FRONTEND_CALLBACK}?token=${token}&uid=${uid}&provider=google`;
+    console.log("Redirecting to:", redirectUrl);
+    
+    // Redirect to the correct React callback with token
+    return res.redirect(redirectUrl);
+  } catch (err: any) {
+    console.error("=== Google OAuth Callback Error ===");
+    console.error("Error message:", err.message);
+    console.error("Error stack:", err.stack);
+    console.error("Full error:", err);
+    return res.status(500).json({ error: "OAuth callback failed", details: err.message });
   }
 };

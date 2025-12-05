@@ -16,8 +16,8 @@
  * @property {number} [age] - The user's age; optional for OAuth users.
  * @property {string} email - The user's email address.
  * @property {string} [password] - The hashed password (only for manual registration).
- * @property {'manual' | 'google' | 'facebook'} authProvider - The authentication provider.
- * @property {string} [oauthId] - The ID coming from OAuth provider (Google or Facebook).
+ * @property {'manual' | 'google' | 'github'} authProvider - The authentication provider.
+ * @property {string} [oauthId] - The ID coming from OAuth provider (Google or GitHub).
  * @property {Date} createdAt - Timestamp when the user was created.
  * @property {string} uid - The Firebase Auth UID for this user.
  */
@@ -28,7 +28,7 @@ export interface User {
   age?: number;
   email: string;
   password?: string;
-  authProvider: 'manual' | 'google' | 'facebook';
+  authProvider: 'manual' | 'google' | 'github';
   oauthId?: string;
   createdAt: Date;
   uid: string;
