@@ -10,7 +10,7 @@ interface UserData {
   uid: string;
   email: string;
   displayName?: string;
-  provider: 'google' | 'facebook' | 'manual';
+  provider: 'google' | 'github' | 'manual';
 }
 
 /**
