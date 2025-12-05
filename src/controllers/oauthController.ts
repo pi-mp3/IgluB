@@ -1,9 +1,6 @@
 /**
- * oauthController.ts
- *
- * Google OAuth 2.0 Sign-In Controller
- * Final production-ready version.
- * Clean, stable and fully documented in English.
+ * oauthController.ts — GOOGLE OAUTH
+ * VERSION CORREGIDA PARA /oauth/callback
  */
 
 import { Request, Response } from "express";
@@ -11,19 +8,17 @@ import admin from "firebase-admin";
 import { db } from "../firebase/firebase";
 import { OAuth2Client } from "google-auth-library";
 
-const FRONTEND_REDIRECT =
-  process.env.FRONTEND_REDIRECT_URL || "http://localhost:5173/auth/success";
+const FRONTEND_CALLBACK =
+  process.env.FRONTEND_CALLBACK_URL || "http://localhost:5173/oauth/callback";
 
-// Google OAuth2 Client
-// Values MUST match the Google Cloud Console configuration.
 export const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID!,
   process.env.GOOGLE_CLIENT_SECRET!,
-  process.env.GOOGLE_REDIRECT_URI! // Example: http://localhost:5000/api/auth/google/callback
+  process.env.GOOGLE_REDIRECT_URI!
 );
 
 /**
- * STEP 1 — Redirect user to Google Consent Page
+ * STEP 1 — Redirect to Google
  */
 export const googleLogin = (_req: Request, res: Response) => {
   const authUrl = googleClient.generateAuthUrl({
@@ -36,38 +31,30 @@ export const googleLogin = (_req: Request, res: Response) => {
 };
 
 /**
- * STEP 2 — Google redirects back with ?code=...
+ * STEP 2 — Google Callback
  */
 export const oauthCallback = async (req: Request, res: Response) => {
   try {
     const code = (req.query.code as string) || (req.body?.code as string);
-    if (!code)
-      return res.status(400).json({ error: "Missing authorization code" });
+    if (!code) return res.status(400).json({ error: "Missing authorization code" });
 
-    // Exchange `code` for Google tokens
     const { tokens } = await googleClient.getToken(code);
     googleClient.setCredentials(tokens);
 
     if (!tokens.id_token)
-      return res
-        .status(500)
-        .json({ error: "Google did not return an ID token" });
+      return res.status(500).json({ error: "Google returned no ID token" });
 
-    // Verify Google ID token
     const ticket = await googleClient.verifyIdToken({
       idToken: tokens.id_token,
       audience: process.env.GOOGLE_CLIENT_ID!,
     });
 
     const payload = ticket.getPayload();
-    if (!payload)
-      return res.status(400).json({ error: "Invalid Google token" });
+    if (!payload) return res.status(400).json({ error: "Invalid Google token" });
 
     const uid = payload.sub;
 
-    // -----------------------------------------------------
-    //   Sync with Firebase Authentication
-    // -----------------------------------------------------
+    // Sync Firebase
     let firebaseUser;
     try {
       firebaseUser = await admin.auth().getUser(uid);
@@ -81,14 +68,12 @@ export const oauthCallback = async (req: Request, res: Response) => {
       });
     }
 
-    // -----------------------------------------------------
-    //   Sync with Firestore Database
-    // -----------------------------------------------------
-    const userRef = db.collection("users").doc(uid);
-    const userSnap = await userRef.get();
-    const exists = userSnap.exists;
+    // Firestore sync
+    const ref = db.collection("users").doc(uid);
+    const snap = await ref.get();
+    const exists = snap.exists;
 
-    const userData = {
+    const data = {
       id: uid,
       name: firebaseUser.displayName || "",
       lastName: "",
@@ -97,26 +82,24 @@ export const oauthCallback = async (req: Request, res: Response) => {
       provider: "google",
       photoURL: firebaseUser.photoURL || "",
       updatedAt: new Date(),
-      createdAt: exists ? userSnap.data()?.createdAt : new Date(),
+      createdAt: exists ? snap.data()?.createdAt : new Date(),
     };
 
-    if (!exists) {
-      await userRef.set(userData);
-    } else {
-      await userRef.update({
-        name: userData.name,
-        email: userData.email,
-        photoURL: userData.photoURL,
+    if (!exists) await ref.set(data);
+    else
+      await ref.update({
+        name: data.name,
+        email: data.email,
+        photoURL: data.photoURL,
         updatedAt: new Date(),
       });
-    }
 
-    // -----------------------------------------------------
-    //   Redirect to frontend authentication success page
-    // -----------------------------------------------------
-    return res.redirect(`${FRONTEND_REDIRECT}?uid=${uid}`);
-  } catch (error) {
-    console.error("Google OAuth Callback Error:", error);
+    // Redirect to the correct React callback
+    return res.redirect(
+      `${FRONTEND_CALLBACK}?uid=${uid}&provider=google`
+    );
+  } catch (err) {
+    console.error("Google OAuth Callback Error:", err);
     return res.status(500).json({ error: "OAuth callback failed" });
   }
 };

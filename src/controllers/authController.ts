@@ -1,10 +1,11 @@
 /**
  * auth.controller.ts
  *
- * Handles user registration, login, update, and password recovery.
- * Technical documentation in English; user-facing messages in Spanish.
+ * Unified user controller for:
+ * - Email/password registration
+ * - Email login
+ * - Firestore user sync
  */
-
 
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
@@ -14,78 +15,121 @@ import { User } from "../models/register";
 const JWT_SECRET = process.env.JWT_SECRET || "my_secret_key";
 
 /**
- * Generates a JWT token for a user.
- * Includes both uid AND email.
+ * Generates a JWT token including uid + email.
  */
 const generateToken = (uid: string, email: string): string => {
   return jwt.sign({ uid, email }, JWT_SECRET, { expiresIn: "7d" });
 };
 
 /**
- * Registers a new user in Firebase Authentication and Firestore.
+ * REGISTRO DE USUARIO (email + password)
+ * Sincronizado con Firestore igual que OAuth (Google/GitHub)
  */
 export const register = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const { email, password, ...data } = req.body as User & { password: string };
+    const { email, password, name, lastName, age } = req.body as User & { password: string };
 
     // Create user in Firebase Authentication
-    const userRecord = await auth.createUser({ email, password });
+    const userRecord = await auth.createUser({
+      email,
+      password,
+      displayName: `${name} ${lastName || ""}`.trim(),
+    });
 
-    // Save additional data in Firestore
-    await db.collection("users").doc(userRecord.uid).set(data);
+    const uid = userRecord.uid;
+
+    // Standard user schema in Firestore (same used by Google/GitHub)
+    const userData = {
+      id: uid,
+      name,
+      lastName: lastName || "",
+      email,
+      provider: "email",
+      photoURL: "",
+      age: age || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // Save user in Firestore
+    await db.collection("users").doc(uid).set(userData);
 
     return res.json({
       mensaje: "Usuario registrado correctamente",
-      uid: userRecord.uid
+      uid,
     });
   } catch (err: any) {
     return res.status(400).json({
       error: "Error al registrar usuario",
-      detalles: err.message
+      detalles: err.message,
     });
   }
 };
 
 /**
- * Logs in a user and generates a JWT token.
- * Note: Password auth must be done in frontend via Firebase Client.
- * Backend only verifies email exists and issues token.
+ * LOGIN (email)
+ * No valida contraseña; el frontend debe autenticar
+ * Solo genera JWT y valida existencia de usuario en Firestore
  */
 export const login = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { email } = req.body;
 
-    // Verify if user exists in Firebase Authentication
-    const user = await auth.getUserByEmail(email);
-    if (!user) {
+    const userRecord = await auth.getUserByEmail(email);
+
+    if (!userRecord) {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
-    // Generate token with uid + email
-    const token = generateToken(user.uid, email);
+    const uid = userRecord.uid;
+
+    /** Ensure Firestore user exists */
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+
+    if (!userSnap.exists) {
+      // Create minimal user if coming from OAuth first time
+      await userRef.set({
+        id: uid,
+        name: userRecord.displayName || "",
+        lastName: "",
+        email,
+        provider: "email",
+        photoURL: userRecord.photoURL || "",
+        age: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+
+    // Generate JWT token
+    const token = generateToken(uid, email);
 
     return res.json({
       mensaje: "Inicio de sesión exitoso",
-      uid: user.uid,
+      uid,
       email,
-      token
+      token,
     });
 
   } catch (err: any) {
     return res.status(400).json({
       error: "Error al iniciar sesión",
-      detalles: err.message
+      detalles: err.message,
     });
   }
 };
 
 /**
- * Updates user data in Firestore.
+ * Update user data in Firestore
  */
 export const updateUser = async (req: Request, res: Response): Promise<Response> => {
   try {
     const userId = req.params.id;
-    const newData = req.body;
+    const newData = {
+      ...req.body,
+      updatedAt: new Date(),
+    };
 
     await db.collection("users").doc(userId).update(newData);
 
@@ -93,14 +137,13 @@ export const updateUser = async (req: Request, res: Response): Promise<Response>
   } catch (err: any) {
     return res.status(400).json({
       error: "Error al actualizar usuario",
-      detalles: err.message
+      detalles: err.message,
     });
   }
 };
 
 /**
- * Sends a password recovery email.
- * Must be handled with Firebase Client SDK.
+ * Password recovery must be done via Firebase Client SDK
  */
 export const recoverPassword = async (req: Request, res: Response): Promise<Response> => {
   return res.status(400).json({
