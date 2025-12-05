@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import { registerUser, loginManual, loginGoogle, loginFacebook, logout } from '../controllers/register.controller';
+import { registerUser, loginManual, loginGoogle, logout } from '../controllers/register.controller';
 
 const router = Router();
 
-router.post('/register', registerUser);
-router.post('/login', loginManual);
-router.post('/login/google', loginGoogle);
-router.post('/login/facebook', loginFacebook);
-router.post('/logout', logout);
+router.post('/register', registerUser);      // Registro manual
+router.post('/login', loginManual);          // Login manual
+router.post('/login/google', loginGoogle);   // Login Google
+router.post('/logout', logout);              // Logout
 
 export default router;
