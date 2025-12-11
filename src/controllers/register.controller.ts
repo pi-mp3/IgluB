@@ -1,3 +1,16 @@
+/**
+ * register.controller.ts
+ *
+ * User registration and login controller for Iglu backend.
+ * ---------------------------------------------------------
+ * - Manual registration & login
+ * - Google OAuth login
+ * - Logout
+ *
+ * Developer docs: English
+ * User-facing text: Spanish
+ */
+
 import { Request, Response } from 'express';
 import { db, auth } from '../firebase/firebase';
 import * as bcrypt from 'bcrypt';
@@ -19,15 +32,18 @@ const isPasswordStrong = (password: string): boolean => {
 
 /**
  * Manual registration.
+ * POST /auth/register
  */
 export const registerUser = async (req: Request, res: Response) => {
   try {
     const { firstName, lastName, age, email, password } = req.body;
 
-    if (!firstName || !lastName || !age || !email || !password) {
+    // Validate required fields
+    if (!firstName || !lastName || age === undefined || !email || !password) {
       return res.status(400).json({ message: 'Todos los campos son obligatorios' });
     }
 
+    // Validate password strength
     if (!isPasswordStrong(password)) {
       return res.status(400).json({
         message:
@@ -36,39 +52,45 @@ export const registerUser = async (req: Request, res: Response) => {
     }
 
     const userRef = db.collection('users');
+
+    // Check if user already exists
     const snapshot = await userRef.where('email', '==', email).get();
     if (!snapshot.empty) {
       return res.status(400).json({ message: 'Usuario ya registrado' });
     }
 
+    // Create Firebase Auth user
     const userRecord = await auth.createUser({
       email,
       password,
       displayName: `${firstName} ${lastName}`,
     });
 
+    // Hash password for Firestore storage
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
+    // Prepare user object to store in Firestore
     const newUser: User = {
-      id: userRecord.uid,
       uid: userRecord.uid,
       name: firstName,
-      lastName,
+      lastName: lastName ?? '',
       email,
       password: hashedPassword,
       provider: "email",
-      age,
+      age: Number(age) ?? undefined,
       photoURL: "",
       oauthId: "",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
+    // Save to Firestore
     await userRef.doc(userRecord.uid).set(newUser);
 
+    // Return full user info with Firebase uid
     return res.status(201).json({
-      id: userRecord.uid,
-      message: 'Usuario registrado exitosamente',
+      mensaje: 'Usuario registrado exitosamente',
+      user: newUser
     });
   } catch (err) {
     console.error('REGISTER ERROR:', err);
@@ -78,6 +100,7 @@ export const registerUser = async (req: Request, res: Response) => {
 
 /**
  * Manual login.
+ * POST /auth/login
  */
 export const loginManual = async (req: Request, res: Response) => {
   try {
@@ -102,7 +125,7 @@ export const loginManual = async (req: Request, res: Response) => {
     return res.json({
       mensaje: 'Inicio de sesión exitoso',
       token,
-      ...userData
+      user: userData
     });
   } catch (err) {
     console.error('LOGIN ERROR:', err);
@@ -112,6 +135,7 @@ export const loginManual = async (req: Request, res: Response) => {
 
 /**
  * Google OAuth login.
+ * POST /auth/google
  */
 export const loginGoogle = async (req: Request, res: Response) => {
   try {
@@ -135,34 +159,32 @@ export const loginGoogle = async (req: Request, res: Response) => {
     let userId: string;
 
     if (snapshot.empty) {
-      // Crear usuario nuevo
+      // Create new user in Firebase Auth
       const userRecord = await auth.createUser({
         email,
         displayName: name,
       });
 
       userData = {
-        id: userRecord.uid,
         uid: userRecord.uid,
-        name,
-        lastName: "",
-        age: null, // Google NO entrega edad
+        name: name ?? '',
+        lastName: '',
+        age: undefined,
         email,
-        password: "",
+        password: '',
         provider: "google",
-        photoURL: picture || "",
-        oauthId: googleId,
+        photoURL: picture ?? '',
+        oauthId: googleId ?? '',
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
       await userRef.doc(userRecord.uid).set(userData);
       userId = userRecord.uid;
-
     } else {
-      // Usuario ya existe → obtenerlo completo
-      userId = snapshot.docs[0].id;
+      // Existing user
       userData = snapshot.docs[0].data() as User;
+      userId = snapshot.docs[0].id;
     }
 
     const token = jwt.sign({ uid: userId, email }, JWT_SECRET, { expiresIn: '2h' });
@@ -170,9 +192,8 @@ export const loginGoogle = async (req: Request, res: Response) => {
     return res.json({
       mensaje: "Inicio de sesión con Google exitoso",
       token,
-      ...userData
+      user: userData
     });
-
   } catch (err) {
     console.error('GOOGLE LOGIN ERROR:', err);
     return res.status(500).json({ message: 'Error interno del servidor' });
@@ -180,7 +201,8 @@ export const loginGoogle = async (req: Request, res: Response) => {
 };
 
 /**
- * Logout.
+ * Logout endpoint.
+ * POST /auth/logout
  */
 export const logout = (_req: Request, res: Response) => {
   return res.json({ message: 'Cierre de sesión exitoso, elimina el token en el frontend' });
