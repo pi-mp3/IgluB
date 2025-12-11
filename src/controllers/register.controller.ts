@@ -10,7 +10,6 @@
  * Developer docs: English
  * User-facing text: Spanish
  */
-
 import { Request, Response } from 'express';
 import { db, auth } from '../firebase/firebase';
 import * as bcrypt from 'bcrypt';
@@ -23,7 +22,7 @@ const SALT_ROUNDS = 10;
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 /**
- * Validates password strength.
+ * Validates password strength: must have uppercase, lowercase, number, special char, min 8 chars
  */
 const isPasswordStrong = (password: string): boolean => {
   const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
@@ -32,18 +31,15 @@ const isPasswordStrong = (password: string): boolean => {
 
 /**
  * Manual registration.
- * POST /auth/register
  */
 export const registerUser = async (req: Request, res: Response) => {
   try {
     const { firstName, lastName, age, email, password } = req.body;
 
-    // Validate required fields
-    if (!firstName || !lastName || age === undefined || !email || !password) {
+    if (!firstName || !lastName || !age || !email || !password) {
       return res.status(400).json({ message: 'Todos los campos son obligatorios' });
     }
 
-    // Validate password strength
     if (!isPasswordStrong(password)) {
       return res.status(400).json({
         message:
@@ -52,45 +48,38 @@ export const registerUser = async (req: Request, res: Response) => {
     }
 
     const userRef = db.collection('users');
-
-    // Check if user already exists
     const snapshot = await userRef.where('email', '==', email).get();
     if (!snapshot.empty) {
       return res.status(400).json({ message: 'Usuario ya registrado' });
     }
 
-    // Create Firebase Auth user
     const userRecord = await auth.createUser({
       email,
       password,
       displayName: `${firstName} ${lastName}`,
     });
 
-    // Hash password for Firestore storage
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-    // Prepare user object to store in Firestore
     const newUser: User = {
       uid: userRecord.uid,
       name: firstName,
-      lastName: lastName ?? '',
+      lastName,
+      age,
       email,
       password: hashedPassword,
-      provider: "email",
-      age: Number(age) ?? undefined,
-      photoURL: "",
-      oauthId: "",
+      authProvider: 'manual',
       createdAt: new Date(),
       updatedAt: new Date(),
+      photoURL: '',
     };
 
-    // Save to Firestore
     await userRef.doc(userRecord.uid).set(newUser);
 
-    // Return full user info with Firebase uid
     return res.status(201).json({
-      mensaje: 'Usuario registrado exitosamente',
-      user: newUser
+      uid: userRecord.uid,
+      message: 'Usuario registrado exitosamente',
+      ...newUser, // devuelve todos los datos guardados
     });
   } catch (err) {
     console.error('REGISTER ERROR:', err);
@@ -100,7 +89,6 @@ export const registerUser = async (req: Request, res: Response) => {
 
 /**
  * Manual login.
- * POST /auth/login
  */
 export const loginManual = async (req: Request, res: Response) => {
   try {
@@ -125,7 +113,7 @@ export const loginManual = async (req: Request, res: Response) => {
     return res.json({
       mensaje: 'Inicio de sesión exitoso',
       token,
-      user: userData
+      ...userData,
     });
   } catch (err) {
     console.error('LOGIN ERROR:', err);
@@ -135,7 +123,6 @@ export const loginManual = async (req: Request, res: Response) => {
 
 /**
  * Google OAuth login.
- * POST /auth/google
  */
 export const loginGoogle = async (req: Request, res: Response) => {
   try {
@@ -159,7 +146,7 @@ export const loginGoogle = async (req: Request, res: Response) => {
     let userId: string;
 
     if (snapshot.empty) {
-      // Create new user in Firebase Auth
+      // Crear usuario nuevo
       const userRecord = await auth.createUser({
         email,
         displayName: name,
@@ -167,14 +154,13 @@ export const loginGoogle = async (req: Request, res: Response) => {
 
       userData = {
         uid: userRecord.uid,
-        name: name ?? '',
+        name,
         lastName: '',
         age: undefined,
         email,
-        password: '',
-        provider: "google",
-        photoURL: picture ?? '',
-        oauthId: googleId ?? '',
+        authProvider: 'google',
+        photoURL: picture || '',
+        oauthId: googleId,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -182,17 +168,17 @@ export const loginGoogle = async (req: Request, res: Response) => {
       await userRef.doc(userRecord.uid).set(userData);
       userId = userRecord.uid;
     } else {
-      // Existing user
-      userData = snapshot.docs[0].data() as User;
+      // Usuario ya existe → obtenerlo completo
       userId = snapshot.docs[0].id;
+      userData = snapshot.docs[0].data() as User;
     }
 
     const token = jwt.sign({ uid: userId, email }, JWT_SECRET, { expiresIn: '2h' });
 
     return res.json({
-      mensaje: "Inicio de sesión con Google exitoso",
+      mensaje: 'Inicio de sesión con Google exitoso',
       token,
-      user: userData
+      ...userData,
     });
   } catch (err) {
     console.error('GOOGLE LOGIN ERROR:', err);
@@ -202,7 +188,6 @@ export const loginGoogle = async (req: Request, res: Response) => {
 
 /**
  * Logout endpoint.
- * POST /auth/logout
  */
 export const logout = (_req: Request, res: Response) => {
   return res.json({ message: 'Cierre de sesión exitoso, elimina el token en el frontend' });
