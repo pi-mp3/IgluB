@@ -15,7 +15,7 @@ import { db, auth } from '../firebase/firebase';
 import * as bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
-import { User } from '../models/User';
+import { User } from '../models/register.model';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey';
 const SALT_ROUNDS = 10;
@@ -77,7 +77,6 @@ export const registerUser = async (req: Request, res: Response) => {
     await userRef.doc(userRecord.uid).set(newUser);
 
     return res.status(201).json({
-      uid: userRecord.uid,
       message: 'Usuario registrado exitosamente',
       ...newUser, // devuelve todos los datos guardados
     });
@@ -138,6 +137,10 @@ export const loginGoogle = async (req: Request, res: Response) => {
     if (!payload) return res.status(401).json({ message: 'Token inválido' });
 
     const { email, name, sub: googleId, picture } = payload;
+
+    if (!email || !name) {
+      return res.status(400).json({ message: 'Datos incompletos desde Google' });
+    }
 
     const userRef = db.collection('users');
     const snapshot = await userRef.where('email', '==', email).get();
