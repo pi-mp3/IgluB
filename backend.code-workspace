@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "../ServidorVozB"
+		},
+		{
+			"path": "../ServidorIA"
 		}
 	],
 	"settings": {}
