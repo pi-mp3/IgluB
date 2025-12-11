@@ -22,14 +22,15 @@
  * @property {string} uid - The Firebase Auth UID for this user.
  */
 export interface User {
-  id?: string;
+  uid: string;                                   // ID único = Firebase UID
   name: string;
   lastName?: string;
   age?: number;
   email: string;
-  password?: string;
-  authProvider: 'manual' | 'google' | 'github';
-  oauthId?: string;
+  password?: string;                             // Solo para usuarios manuales
+  authProvider: 'manual' | 'google' | 'github';  // Provider real que usas
+  oauthId?: string;                              // ID de Google/GitHub si aplica
+  photoURL?: string;
   createdAt: Date;
-  uid: string;
+  updatedAt?: Date;
 }

@@ -1,129 +1,152 @@
 /**
- * oauthController.ts — GOOGLE OAUTH
- * VERSION CORREGIDA PARA /oauth/callback
+ * auth.controller.ts
+ *
+ * Unified controller for:
+ *  - Email/password registration
+ *  - Email login
+ *  - Firestore synchronization
+ * 
+ * Documentation: English
+ * User messages: Spanish
  */
 
 import { Request, Response } from "express";
-import admin from "firebase-admin";
-import { db } from "../firebase/firebase";
-import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
+import { auth, db } from "../firebase/firebase";
+import { User } from "../models/User";
 
-const FRONTEND_CALLBACK =
-  process.env.FRONTEND_CALLBACK_URL || "http://localhost:5173/oauth/callback";
+const JWT_SECRET = process.env.JWT_SECRET || "my_secret_key";
 
-const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
-
-export const googleClient = new OAuth2Client(
-  process.env.GOOGLE_CLIENT_ID!,
-  process.env.GOOGLE_CLIENT_SECRET!,
-  process.env.GOOGLE_REDIRECT_URI!
-);
-
-/**
- * STEP 1 — Redirect to Google
- */
-export const googleLogin = (_req: Request, res: Response) => {
-  const authUrl = googleClient.generateAuthUrl({
-    access_type: "offline",
-    prompt: "consent",
-    scope: ["profile", "email"],
-  });
-
-  return res.redirect(authUrl);
+/** Generates a JWT token */
+const generateToken = (uid: string, email: string): string => {
+  return jwt.sign({ uid, email }, JWT_SECRET, { expiresIn: "7d" });
 };
 
 /**
- * STEP 2 — Google Callback
+ * REGISTRO (email y password)
  */
-export const oauthCallback = async (req: Request, res: Response) => {
+export const register = async (req: Request, res: Response): Promise<Response> => {
   try {
-    console.log("=== Google OAuth Callback Started ===");
-    console.log("Query params:", req.query);
-    console.log("Body:", req.body);
-    
-    const code = (req.query.code as string) || (req.body?.code as string);
-    if (!code) {
-      console.error("No authorization code received");
-      return res.status(400).json({ error: "Missing authorization code" });
-    }
+    const { email, password, name, lastName, age } = req.body as User & { password: string };
 
-    console.log("Getting tokens from Google...");
-    const { tokens } = await googleClient.getToken(code);
-    googleClient.setCredentials(tokens);
-    console.log("Tokens received successfully");
-
-    if (!tokens.id_token)
-      return res.status(500).json({ error: "Google returned no ID token" });
-
-    const ticket = await googleClient.verifyIdToken({
-      idToken: tokens.id_token,
-      audience: process.env.GOOGLE_CLIENT_ID!,
+    const userRecord = await auth.createUser({
+      email,
+      password,
+      displayName: `${name} ${lastName || ""}`.trim(),
     });
 
-    const payload = ticket.getPayload();
-    if (!payload) {
-      console.error("Invalid payload from Google");
-      return res.status(400).json({ error: "Invalid Google token" });
-    }
+    const uid = userRecord.uid;
 
-    const uid = payload.sub;
-    console.log("User authenticated:", { uid, email: payload.email, name: payload.name });
-
-    // Sync Firebase
-    let firebaseUser;
-    try {
-      firebaseUser = await admin.auth().getUser(uid);
-    } catch {
-      firebaseUser = await admin.auth().createUser({
-        uid,
-        email: payload.email!,
-        displayName: payload.name!,
-        photoURL: payload.picture!,
-        emailVerified: true,
-      });
-    }
-
-    // Firestore sync
-    const ref = db.collection("users").doc(uid);
-    const snap = await ref.get();
-    const exists = snap.exists;
-
-    const data = {
+    const userData = {
       id: uid,
-      name: firebaseUser.displayName || "",
-      lastName: "",
-      email: firebaseUser.email!,
-      age: null,
-      provider: "google",
-      photoURL: firebaseUser.photoURL || "",
+      name,
+      lastName: lastName || "",
+      email,
+      provider: "email",
+      photoURL: "",
+      age: age || null,
+      createdAt: new Date(),
       updatedAt: new Date(),
-      createdAt: exists ? snap.data()?.createdAt : new Date(),
     };
 
-    if (!exists) await ref.set(data);
-    else
-      await ref.update({
-        name: data.name,
-        email: data.email,
-        photoURL: data.photoURL,
-        updatedAt: new Date(),
-      });
+    await db.collection("users").doc(uid).set(userData);
 
-    // Generate JWT token
-    const token = jwt.sign({ uid, email: data.email }, JWT_SECRET, { expiresIn: "7d" });
-    console.log("JWT token generated successfully");
+    return res.json({
+      mensaje: "Usuario registrado correctamente",
+      uid,
+      ...userData
+    });
 
-    const redirectUrl = `${FRONTEND_CALLBACK}?token=${token}&uid=${uid}&provider=google`;
-    console.log("Redirecting to:", redirectUrl);
-    
-    // Redirect to the correct React callback with token
-    return res.redirect(redirectUrl);
   } catch (err: any) {
-    console.error("=== Google OAuth Callback Error ===");
-    console.error("Error message:", err.message);
-    console.error("Error stack:", err.stack);
-    console.error("Full error:", err);
-    return res.status(500).json({ error: "OAuth callback failed", details: err.message });
+    return res.status(400).json({
+      error: "Error al registrar usuario",
+      detalles: err.message,
+    });
   }
+};
+
+/**
+ * LOGIN (email)
+ */
+export const login = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { email } = req.body;
+
+    const userRecord = await auth.getUserByEmail(email);
+
+    if (!userRecord) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const uid = userRecord.uid;
+
+    // Leer Firestore
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+
+    let userData;
+
+    if (!userSnap.exists) {
+      userData = {
+        id: uid,
+        name: userRecord.displayName || "",
+        lastName: "",
+        email,
+        provider: "",
+        age: "",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await userRef.set(userData);
+    } else {
+      userData = userSnap.data();
+    }
+
+    const token = generateToken(uid, email);
+
+    return res.json({
+      mensaje: "Inicio de sesión exitoso",
+      uid,
+      token,
+      ...userData
+    });
+
+  } catch (err: any) {
+    return res.status(400).json({
+      error: "Error al iniciar sesión",
+      detalles: err.message,
+    });
+  }
+};
+
+/**
+ * UPDATE USER
+ */
+export const updateUser = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const userId = req.params.id;
+    const newData = {
+      ...req.body,
+      updatedAt: new Date(),
+    };
+
+    await db.collection("users").doc(userId).update(newData);
+
+    return res.json({ mensaje: "Usuario actualizado correctamente" });
+  } catch (err: any) {
+    return res.status(400).json({
+      error: "Error al actualizar usuario",
+      detalles: err.message,
+    });
+  }
+};
+
+/**
+ * RECUPERAR CONTRASEÑA
+ */
+export const recoverPassword = async (req: Request, res: Response): Promise<Response> => {
+  return res.status(400).json({
+    error: "La recuperación de contraseña debe realizarse desde el frontend con Firebase Client SDK",
+  });
 };
