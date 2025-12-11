@@ -15,7 +15,7 @@ import { db, auth } from '../firebase/firebase';
 import * as bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
-import { User } from '../models/register.model';
+import { User } from '../models/User';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey';
 const SALT_ROUNDS = 10;
