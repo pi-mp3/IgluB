@@ -1,152 +1,144 @@
 /**
- * auth.controller.ts
+ * oauthController.ts
  *
- * Unified controller for:
- *  - Email/password registration
- *  - Email login
- *  - Firestore synchronization
- * 
- * Documentation: English
- * User messages: Spanish
+ * Handles Google OAuth login + callback flow.
+ *
+ * Developer documentation: English
+ * User-facing messages: Spanish
+ *
+ * This controller:
+ *  - Redirects user to Google OAuth provider (handled by backend route)
+ *  - Receives Google's callback with ?code=
+ *  - Exchanges the authorization code for user profile data
+ *  - Creates or syncs the user in Firestore
+ *  - Generates a custom JWT and redirects to frontend with credentials
  */
 
 import { Request, Response } from "express";
+import { db, auth } from "../firebase/firebase";
 import jwt from "jsonwebtoken";
-import { auth, db } from "../firebase/firebase";
-import { User } from "../models/User";
+import fetch from "node-fetch";
 
 const JWT_SECRET = process.env.JWT_SECRET || "my_secret_key";
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
-/** Generates a JWT token */
+/** Generates the local JWT */
 const generateToken = (uid: string, email: string): string => {
   return jwt.sign({ uid, email }, JWT_SECRET, { expiresIn: "7d" });
 };
 
 /**
- * REGISTRO (email y password)
+ * STEP 1 — Redirect user to Google OAuth page
  */
-export const register = async (req: Request, res: Response): Promise<Response> => {
+export const googleLogin = async (req: Request, res: Response) => {
   try {
-    const { email, password, name, lastName, age } = req.body as User & { password: string };
+    const url =
+      "https://accounts.google.com/o/oauth2/v2/auth?" +
+      new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        redirect_uri: GOOGLE_REDIRECT_URI,
+        response_type: "code",
+        scope: "profile email",
+        access_type: "offline",
+        prompt: "consent",
+      });
 
-    const userRecord = await auth.createUser({
-      email,
-      password,
-      displayName: `${name} ${lastName || ""}`.trim(),
+    return res.redirect(url);
+  } catch (err: any) {
+    console.error("Google Login Error:", err);
+    return res.status(500).json({
+      error: "Error al iniciar autenticación con Google",
+      detalles: err.message,
+    });
+  }
+};
+
+/**
+ * STEP 2 — Google redirects back with ?code=
+ * This controller:
+ *  - Exchanges the code for access_token & id_token
+ *  - Extracts user profile
+ *  - Saves/updates Firestore user
+ *  - Generates JWT
+ *  - Redirects user to the frontend with token + data
+ */
+export const googleCallback = async (req: Request, res: Response) => {
+  try {
+    const { code } = req.query;
+
+    if (!code) {
+      return res.redirect(`${FRONTEND_URL}/auth/success/login?error=missing-code`);
+    }
+
+    /** Exchange code for tokens */
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: GOOGLE_REDIRECT_URI,
+        grant_type: "authorization_code",
+      }),
     });
 
-    const uid = userRecord.uid;
+    const tokenData = await tokenRes.json();
+
+    if (!tokenData.access_token) {
+      return res.redirect(
+        `${FRONTEND_URL}/auth/success/login?error=google-token-failed`
+      );
+    }
+
+    /** Get Google Profile */
+    const profileRes = await fetch(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      }
+    );
+
+    const profile = await profileRes.json();
+
+    const uid = profile.id;
+    const email = profile.email;
+
+    /** Check Firestore user */
+    const userRef = db.collection("users").doc(uid);
+    const snap = await userRef.get();
 
     const userData = {
       id: uid,
-      name,
-      lastName: lastName || "",
+      name: profile.given_name || "",
+      lastName: profile.family_name || "",
       email,
-      provider: "email",
-      photoURL: "",
-      age: age || null,
-      createdAt: new Date(),
+      provider: "google",
+      photoURL: profile.picture || "",
+      age: null,
+      createdAt: snap.exists ? snap.data()!.createdAt : new Date(),
       updatedAt: new Date(),
     };
 
-    await db.collection("users").doc(uid).set(userData);
+    /** Save/update Firestore */
+    await userRef.set(userData, { merge: true });
 
-    return res.json({
-      mensaje: "Usuario registrado correctamente",
-      uid,
-      ...userData
-    });
-
-  } catch (err: any) {
-    return res.status(400).json({
-      error: "Error al registrar usuario",
-      detalles: err.message,
-    });
-  }
-};
-
-/**
- * LOGIN (email)
- */
-export const login = async (req: Request, res: Response): Promise<Response> => {
-  try {
-    const { email } = req.body;
-
-    const userRecord = await auth.getUserByEmail(email);
-
-    if (!userRecord) {
-      return res.status(404).json({ error: "Usuario no encontrado" });
-    }
-
-    const uid = userRecord.uid;
-
-    // Leer Firestore
-    const userRef = db.collection("users").doc(uid);
-    const userSnap = await userRef.get();
-
-    let userData;
-
-    if (!userSnap.exists) {
-      userData = {
-        id: uid,
-        name: userRecord.displayName || "",
-        lastName: "",
-        email,
-        provider: "",
-        age: "",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      await userRef.set(userData);
-    } else {
-      userData = userSnap.data();
-    }
-
+    /** Generate authentication token */
     const token = generateToken(uid, email);
 
-    return res.json({
-      mensaje: "Inicio de sesión exitoso",
-      uid,
-      token,
-      ...userData
-    });
+    /** Redirect to frontend with token */
+    return res.redirect(
+      `${FRONTEND_URL}/auth/success?token=${token}&uid=${uid}`
+    );
 
   } catch (err: any) {
-    return res.status(400).json({
-      error: "Error al iniciar sesión",
+    console.error("Google Callback Error:", err);
+    return res.status(500).json({
+      error: "Error al procesar la autenticación con Google",
       detalles: err.message,
     });
   }
-};
-
-/**
- * UPDATE USER
- */
-export const updateUser = async (req: Request, res: Response): Promise<Response> => {
-  try {
-    const userId = req.params.id;
-    const newData = {
-      ...req.body,
-      updatedAt: new Date(),
-    };
-
-    await db.collection("users").doc(userId).update(newData);
-
-    return res.json({ mensaje: "Usuario actualizado correctamente" });
-  } catch (err: any) {
-    return res.status(400).json({
-      error: "Error al actualizar usuario",
-      detalles: err.message,
-    });
-  }
-};
-
-/**
- * RECUPERAR CONTRASEÑA
- */
-export const recoverPassword = async (req: Request, res: Response): Promise<Response> => {
-  return res.status(400).json({
-    error: "La recuperación de contraseña debe realizarse desde el frontend con Firebase Client SDK",
-  });
 };
