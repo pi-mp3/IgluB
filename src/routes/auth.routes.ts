@@ -1,41 +1,97 @@
+/**
+ * authManual.routes.ts
+ * ---------------------------------------------------------
+ * Manual Email/Password Login using REAL Firebase Authentication.
+ *
+ * This file replaces the previous mock login logic.
+ * It performs a REAL sign-in request against Firebase Auth
+ * using the REST API (email + password).
+ *
+ * USER EXPERIENCE (in Postman or Frontend):
+ *  - Success → JSON containing JWT + Firebase user data
+ *  - Failure → "Invalid credentials" (401)
+ *
+ * ENDPOINTS:
+ *   POST /manual/login
+ *
+ * Author: Your Name
+ * ---------------------------------------------------------
+ */
+
 import { Router } from "express";
+import jwt from "jsonwebtoken";
+import { auth } from "../firebase/firebase"; // Firebase Admin
 
 const router = Router();
 
-// LOGIN MANUAL (email/password)
+/**
+ * POST /manual/login
+ * ---------------------------------------------------------
+ * Validates email/password using Firebase Auth REST API.
+ * Steps:
+ *  1. Send email/password to Firebase Auth REST API
+ *  2. If valid → retrieve user from Firebase Admin
+ *  3. Generate backend JWT
+ * ---------------------------------------------------------
+ */
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  // TODO: valida con tu DB
-  if (email === "test@example.com" && password === "123456") {
+    // Missing fields?
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Email and password are required",
+      });
+    }
+
+    // 1. Firebase Sign In
+    const firebaseAuthRes = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          returnSecureToken: true,
+        }),
+      }
+    );
+
+    const data = await firebaseAuthRes.json();
+
+    // Firebase rejected credentials
+    if (!firebaseAuthRes.ok) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // 2. Retrieve real user info from Firebase Admin
+    const firebaseUser = await auth.getUser(data.localId);
+
+    // 3. Generate backend JWT
+    const token = jwt.sign(
+      {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: "7d" }
+    );
+
     return res.json({
-      token: "FAKE_JWT_TOKEN", // aquí genera tu JWT real
-      user: { uid: "1", email, name: "Test User" },
+      message: "Login successful",
+      token,
+      user: {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        name: firebaseUser.displayName || "No Name",
+      },
     });
+  } catch (error) {
+    console.error("MANUAL LOGIN ERROR:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
-
-  res.status(401).json({ message: "Credenciales incorrectas" });
-});
-
-// GOOGLE OAUTH
-router.get("/google", (req, res) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = "http://localhost:5000/auth/google/callback";
-  const scope = "openid email profile";
-
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`;
-  res.redirect(url);
-});
-
-router.get("/google/callback", async (req, res) => {
-  const code = req.query.code;
-  if (!code) return res.status(400).send("No code provided");
-
-  // TODO: intercambia code por token con Google y busca/crea usuario
-  const token = "FAKE_JWT_TOKEN"; 
-  const user = { uid: "1", email: "googleuser@example.com", name: "Google User" };
-
-  res.redirect(`http://localhost:5173/oauth/callback?token=${token}&uid=${user.uid}&email=${user.email}&name=${user.name}&provider=google`);
 });
 
 export default router;
