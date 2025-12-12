@@ -15,7 +15,7 @@
  */
 
 import { Request, Response } from "express";
-import { db, auth } from "../firebase/firebase";
+import { db } from "../firebase/firebase";
 import jwt from "jsonwebtoken";
 import fetch from "node-fetch";
 
@@ -25,7 +25,7 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
-/** Generates the local JWT */
+/** Generates a local JWT for frontend authentication */
 const generateToken = (uid: string, email: string): string => {
   return jwt.sign({ uid, email }, JWT_SECRET, { expiresIn: "7d" });
 };
@@ -57,24 +57,25 @@ export const googleLogin = async (req: Request, res: Response) => {
 };
 
 /**
- * STEP 2 — Google redirects back with ?code=
- * This controller:
- *  - Exchanges the code for access_token & id_token
- *  - Extracts user profile
- *  - Saves/updates Firestore user
- *  - Generates JWT
- *  - Redirects user to the frontend with token + data
+ * STEP 2 — Handle Google OAuth callback
+ *
+ * Backend receives `?code=...` from Google
+ * Exchanges the code for access_token, fetches user profile
+ * Updates/creates Firestore user
+ * Generates JWT and redirects to frontend with token + uid
  */
 export const googleCallback = async (req: Request, res: Response) => {
   try {
     const { code } = req.query;
 
-    if (!code) {
-      return res.redirect(`${FRONTEND_URL}/auth/success/login?error=missing-code`);
+    if (!code || typeof code !== "string") {
+      return res.redirect(
+        `${FRONTEND_URL}/auth/success/login?error=missing-code`
+      );
     }
 
-    /** Exchange code for tokens */
-    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    /** Exchange authorization code for tokens */
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -86,31 +87,40 @@ export const googleCallback = async (req: Request, res: Response) => {
       }),
     });
 
-    const tokenData = await tokenRes.json();
+    const tokenData = await tokenResponse.json();
 
     if (!tokenData.access_token) {
+      console.error("Google token exchange failed:", tokenData);
       return res.redirect(
         `${FRONTEND_URL}/auth/success/login?error=google-token-failed`
       );
     }
 
-    /** Get Google Profile */
-    const profileRes = await fetch(
+    /** Fetch Google user profile */
+    const profileResponse = await fetch(
       "https://www.googleapis.com/oauth2/v2/userinfo",
       {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       }
     );
 
-    const profile = await profileRes.json();
+    const profile = await profileResponse.json();
+
+    if (!profile?.id || !profile?.email) {
+      console.error("Google profile fetch failed:", profile);
+      return res.redirect(
+        `${FRONTEND_URL}/auth/success/login?error=google-profile-failed`
+      );
+    }
 
     const uid = profile.id;
     const email = profile.email;
 
-    /** Check Firestore user */
+    /** Firestore user reference */
     const userRef = db.collection("users").doc(uid);
     const snap = await userRef.get();
 
+    /** Prepare user data for Firestore */
     const userData = {
       id: uid,
       name: profile.given_name || "",
@@ -123,17 +133,16 @@ export const googleCallback = async (req: Request, res: Response) => {
       updatedAt: new Date(),
     };
 
-    /** Save/update Firestore */
+    /** Save or update user in Firestore */
     await userRef.set(userData, { merge: true });
 
-    /** Generate authentication token */
+    /** Generate JWT for frontend session */
     const token = generateToken(uid, email);
 
-    /** Redirect to frontend with token */
+    /** Redirect to frontend with token + uid */
     return res.redirect(
       `${FRONTEND_URL}/auth/success?token=${token}&uid=${uid}`
     );
-
   } catch (err: any) {
     console.error("Google Callback Error:", err);
     return res.status(500).json({
