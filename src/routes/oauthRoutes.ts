@@ -6,7 +6,7 @@
  *  - Redirect to Google
  *  - OAuth callback
  *
- * Logic is handled in googleController.ts
+ * Logic is handled in oauthController.ts
  */
 
 import { Router } from "express";
@@ -18,16 +18,14 @@ import {
 const router = Router();
 
 /**
- * STEP 1
+ * STEP 1 — Redirect user to Google login page
  * GET /api/auth/google
- * → Send user to Google login screen
  */
 router.get("/google", googleLogin);
 
 /**
- * STEP 2
+ * STEP 2 — Google redirects back here after login
  * GET /api/auth/google/callback
- * → Google redirects back here
  */
 router.get("/google/callback", googleCallback);
 
